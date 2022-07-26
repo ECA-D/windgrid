@@ -1,4 +1,4 @@
 # windgrid
 R scripts for E-OBS gridding of daily-averaged windspeed
 
-Run files in sequence, indicated by numbering of the directories
+The currently used scripts are in /v25e_M5_26_July_2022/
