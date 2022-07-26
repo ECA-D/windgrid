@@ -1,0 +1,74 @@
+# ----------------------------------------------------------------------------
+# EOBS FG CONFIG FILE
+#
+# ----------------------------------------------------------------------------
+
+stn_db: /data2/Else/Jouke/WindInput/Sqlite/eobs_fg_no_homog.sqlite
+scratch:  /data3/Else/EOBSv26.0e/Grid_0.1deg/fg/Tempfiles/ # can be overruled by commandline
+#stn_dir: /data2/Else/Jouke/WindInput/Stations/ # can be overruled by commandline
+txtload_source: /home/besselaa/Jouke/WindGrid/scripts/utilities/sqliteload.R
+year: 1950 # can be overruled by commandline
+month: 1 # can be overruled by commandline
+lonmin: -11.05 
+lonmax: 39.95 
+latmin: 35.05 
+latmax: 69.95 
+resolution: 0.1 
+nEnsemble: 20 # 20 # number of ensemble members
+NstationMax: 5000 
+degTreshold: 0.001
+verbose: 1 # 0: very few info, 1: a bit more info, 2: even more info, 3: lot of info
+ivar: fg
+
+preprocess:
+  era5name: /data2/Else/Jouke/WindInput/ERA5Wind/WDSP_monmean_800hPa_1980-2020_EOBSgrid.nc
+  roughness_dir: /data2/Else/Jouke/WindInput/Roughness/
+  minRoughnessYear: 1980
+  maxRoughnessYear: 2018
+  nanValue: -999.9 # currently checking: <0
+  blur: TRUE 
+  gridname: /data2/Richard/eobs/gtopo30_gis_1km.gri
+  allvars: "lon,lat"
+
+forward_sel:
+  lr_source: /home/besselaa/Jouke/WindGrid/scripts/utilities/lrFunctions.R
+  nIterRefineMin: 2 # minimum number of forward selection iterations
+  nIterRefineMax: 6 #  maximum number of forward selection iterations
+  tol_RRMSE: 0.00 # tolerance for minimum-observed-criterion
+  tol_relax: 1000 #  number of relaxation iterations before tol-based termination
+  power_limiter: c(3,3,1,2,2,2,1,2) # TRUE # maximum covariate power
+  nfold: 20 # 10 # number of folds for x-validation
+  seed: 0 # seed for cross-validation (forward selection based on random seed)
+  plot: FALSE # TRUE or FALSE
+  xvalselect: TRUE # TRUE: x-validation error | FALSE: training error
+  nStationMin: 50
+  dmax: 150000 # maximum distance to coast
+
+gridding: # gprAnomaly
+  gpr_source: /home/besselaa/Jouke/WindGrid/scripts/utilities/gprFunctions.R
+  edit_source: /home/besselaa/Jouke/WindGrid/scripts/utilities/editFunctionsNonNegative.R
+  relnoisey: 0.01
+  useSparseMatrices: TRUE
+  lagTreshold: 150000 # NON-SPARSE: maximum station-to-grid lag for prediction; SPARSE: maximum lag for analysis and prediction
+#  lagTreshold: 50000 # maximum station-to-grid lag for prediction
+  thetaMin: 20000
+  thetaMax: 50000 
+  nThetaBrute: 16
+  plots: FALSE
+  useBackground0: TRUE
+  corrPower: 1.0
+  randomSeed: 0
+  nfold: 20 # can be different from forward_sel
+  allvars: "lon,lat"
+  xvalSeed: 0
+  EDIToptimMethod: "BFGS"
+  EDIToptimMaxIter: 30 # 30
+  writeRawEnsemble: FALSE
+  writeTunedEnsemble: TRUE
+
+postprocess:
+  final_dir_10: /data3/Else/EOBSv26.0e/Grid_0.1deg/fg/
+  final_dir_25: /data3/Else/EOBSv26.0e/Grid_0.25deg/fg/
+  plots: FALSE
+  version: 'v26.0e'
+  scalefactor: 0.01

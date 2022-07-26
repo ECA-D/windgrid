@@ -1,0 +1,108 @@
+
+read.ecad.fg <- function(stn_db, itable, allvars, dbvar, ivar, Period, xrng, yrng, 
+                      Year=NULL, Day=NULL,debug=FALSE, month.field="period", cnt.limit=10){
+
+    if(debug) message("Reading data")
+
+    statement <- paste0("SELECT %s.id as id, %s, ",
+                        "%s as %s , year, month, day ",
+                        "FROM %s, meta ",
+                        "WHERE %s IS NOT NULL AND %s.id=meta.id AND %s = %d ",
+                        "AND lon >= %f AND lon <= %f AND lat >= %f AND lat <= %f")
+    
+    statement <- sprintf(statement,itable,allvars,dbvar,ivar,itable,ivar,itable,month.field,
+                         Period,xrng[1], xrng[2], yrng[1],yrng[2])
+
+    if(!is.null(Year)) statement <- paste(statement, sprintf("AND year=%d",Year))
+    if(!is.null(Day)) statement <- paste(statement, sprintf("AND day=%d",Day))
+
+    ## Sometimes parallel calls to the database result in failure.
+    ## This tries repeated calls with a time delay.
+    mondat.read <- data.frame()
+    cnt <- 1
+    while(nrow(mondat.read)==0 & cnt<=cnt.limit){
+        if(cnt>1) Sys.sleep(10)         #Wait 10 secs
+        db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname=stn_db)
+        mondat.read <- RSQLite::dbGetQuery(db, statement)
+        close.db <- RSQLite::dbDisconnect(db)
+        cnt <- cnt + 1
+    }
+
+    if(nrow(mondat.read)==0){
+        warning("No data found")
+        return(NULL)
+    }
+
+    ## Average "duplicate" stations
+    coordinates(mondat.read) <- ~lon+lat
+    proj4string(mondat.read) <- "+proj=longlat +datum=WGS84"
+
+    mondat.read
+}
+
+readStationData <- function(year,month,stn_db,allvars,lonmin,lonmax,latmin,latmax,ivar)
+{
+  # local settings
+#  NstationMax = 5000
+  #stn_db = '/data3/Else/EOBSv24.0e/Input/eobs_fg_no_homog.sqlite'
+  # stn_db = '/data2/Else/Jouke/WindInput/Sqlite/eobs_fg_no_homog.sqlite'
+  # allvars = "lon,lat"
+  # lonmin = -11.05 
+  # lonmax = 39.95 
+  # latmin =  35.05 
+  # latmax =  69.95 
+  lon_rng = c(lonmin,lonmax)
+  lat_rng = c(latmin,latmax)
+  debug = FALSE
+  # ivar = "fg"
+
+  dat <- read.ecad.fg(stn_db,"day",allvars,"var",ivar,month,
+                         lon_rng,lat_rng,Year=year,debug=debug)
+  dframe = data.frame(id=dat@data[,1,drop=FALSE],
+                  year=dat@data[,3,drop=FALSE],
+                  month=dat@data[,4,drop=FALSE],
+                  day=dat@data[,5,drop=FALSE],
+                  lon=dat@coords[,1,drop=FALSE],
+                  lat=dat@coords[,2,drop=FALSE],
+                  fg=dat@data[,2,drop=FALSE])
+
+  # get number of days in month
+  ystr = toString(year)
+  if(month<10){
+    mstr = paste("0",toString(month),sep="")
+  } else {
+    mstr = toString(month)
+  }
+  nDays = monthDays(as.Date(paste(ystr,'-',mstr,'-01',sep='')))
+
+  # get unique station ids
+  uniqueID = unique(dframe$id)
+  nunique = length(uniqueID)
+
+  # search for associated daily averaged speed
+  IDfixed = matrix(NA,nunique,nDays)
+  Lonfixed = matrix(NA,nunique,nDays)
+  Latfixed = matrix(NA,nunique,nDays)
+  Speedfixed = matrix(NA,nunique,nDays)
+  for(dy in 1:nDays){
+    for(searchid in 1:nunique){
+      test = dframe[(dframe$id==uniqueID[searchid])&(dframe$day==dy),'id']
+      IDfixed[searchid,dy] = mean(dframe[(dframe$id==uniqueID[searchid]),'id'])
+      Lonfixed[searchid,dy] = mean(dframe[(dframe$id==uniqueID[searchid]),'lon'])
+      Latfixed[searchid,dy] = mean(dframe[(dframe$id==uniqueID[searchid]),'lat'])
+      if(length(test)==1){
+       Speedfixed[searchid,dy] = dframe[(dframe$id==uniqueID[searchid])&(dframe$day==dy),'fg']
+      }
+    }
+  }
+
+  # store final station data for return
+  stationData = list(id=IDfixed)
+  stationData$lon = Lonfixed
+  stationData$lat = Latfixed
+  stationData$speed = Speedfixed
+
+  return(stationData)
+
+}
+

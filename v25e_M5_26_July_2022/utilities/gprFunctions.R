@@ -1,0 +1,76 @@
+library(geosphere)
+
+# kriging lag
+krigingLag <- function(x1,x2)
+{
+  N1 = dim(x1)
+  N2 = dim(x2)
+  X1 = meshgrid(x2[,1,drop=FALSE],x1[,1,drop=FALSE])
+  X2 = meshgrid(x2[,2,drop=FALSE],x1[,2,drop=FALSE])
+  n1 = size(X1$Y)[1]
+  n2 = size(X1$Y)[2]
+  lon1 = matrix(X1$Y,n1*n2,1)
+  lon2 = matrix(X1$X,n1*n2,1)
+  lat1 = matrix(X2$Y,n1*n2,1)
+  lat2 = matrix(X2$X,n1*n2,1)
+  #lon1 = matrix(X1$Y,n1*n2,1)*pi/180.
+  #lon2 = matrix(X1$X,n1*n2,1)*pi/180.
+  #lat1 = matrix(X2$Y,n1*n2,1)*pi/180.
+  #lat2 = matrix(X2$X,n1*n2,1)*pi/180.
+  H = distCosine(cbind(lon1,lat1),cbind(lon2,lat2))
+  #H = distVincentyEllipsoid(cbind(lon1,lat1),cbind(lon2,lat2))
+  #H = geo.dist(x1,x2)
+  #R = 6371000 # Earth mean radius [m]
+  #H = acos(sin(lat1)*sin(lat2) + cos(lat1)*cos(lat2) * cos(lon2-lon1)) * R
+
+  H = matrix(H,n1,n2)
+
+  return(abs(H))
+}
+
+krigingLagSparse <- function(x1,x2,maxLag)
+{
+  n1 = size(x1)[1]
+  n2 = size(x2)[1]
+  H = krigingLag(x1[1,,drop=FALSE],x2)
+  H = maxLag - H
+  H[H<0.] = 0.
+  H = Matrix(H,sparse=TRUE)
+  for(k in 2:n1){
+    Hline = krigingLag(x1[k,,drop=FALSE],x2)
+    Hline = maxLag - Hline
+    Hline[Hline<0.] = 0.
+    Hline = Matrix(Hline,sparse=TRUE)
+    H = rbind(H,Hline)
+  }
+  return(H)
+}
+
+krigingLagSparseFaster <- function(x1,x2,maxLag,nline)
+{
+  #nline = 100
+
+  n1 = size(x1)[1]
+  n2 = size(x2)[1]
+
+  nblock = ceiling(n1/nline)
+  idblock = seq(0,n1,by=nline)
+  idblock[1] = 1
+  if(length(idblock)<=nblock){
+    idblock = cbind(idblock,n1)
+  }
+
+
+  H = krigingLag(x1[idblock[1]:idblock[2],,drop=FALSE],x2)
+  H = maxLag - H
+  H[H<0.] = 0.
+  H = Matrix(H,sparse=TRUE)
+  for(k in 2:nblock){
+    Hline = krigingLag(x1[(idblock[k]+1):idblock[k+1],,drop=FALSE],x2)
+    Hline = maxLag - Hline
+    Hline[Hline<0.] = 0.
+    Hline = Matrix(Hline,sparse=TRUE)
+    H = rbind(H,Hline)
+  }
+  return(H)
+}
